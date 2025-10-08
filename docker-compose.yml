@@ -74,7 +74,7 @@ services:
       - bitcoin-network
 
   btc-rpc-explorer:
-    image: btcpayserver/btc-rpc-explorer:latest
+    image: tyzbit/btc-rpc-explorer:latest
     container_name: btc-rpc-explorer
     environment:
       BTCEXP_HOST: "0.0.0.0"
