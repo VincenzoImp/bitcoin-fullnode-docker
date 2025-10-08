@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  tor:
+    image: dperson/torproxy:latest
+    container_name: tor-proxy
+    restart: unless-stopped
+    networks:
+      - bitcoin-network
+
+  bitcoin-core:
+    image: lncm/bitcoind:v27.0
+    container_name: bitcoin-node
+    volumes:
+      - ./bitcoin-data:/data/.bitcoin
+      - ./bitcoin.conf:/data/.bitcoin/bitcoin.conf
+    ports:
+      - "8332:8332"  # RPC
+      - "8333:8333"  # P2P
+      - "28332:28332" # ZMQ
+      - "28333:28333" # ZMQ
+    restart: unless-stopped
+    depends_on:
+      - tor
+    networks:
+      - bitcoin-network
+
+  mempool-web:
+    image: mempool/frontend:latest
+    container_name: mempool-web
+    environment:
+      FRONTEND_HTTP_PORT: "8080"
+      BACKEND_MAINNET_HTTP_HOST: "mempool-api"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      - mempool-api
+    networks:
+      - bitcoin-network
+
+  mempool-api:
+    image: mempool/backend:latest
+    container_name: mempool-api
+    environment:
+      MEMPOOL_BACKEND: "none"
+      CORE_RPC_HOST: "bitcoin-core"
+      CORE_RPC_PORT: "8332"
+      CORE_RPC_USERNAME: "bitcoin"
+      CORE_RPC_PASSWORD: "bitcoinpassword"
+      DATABASE_ENABLED: "true"
+      DATABASE_HOST: "mempool-db"
+      DATABASE_DATABASE: "mempool"
+      DATABASE_USERNAME: "mempool"
+      DATABASE_PASSWORD: "mempool"
+      STATISTICS_ENABLED: "true"
+    restart: unless-stopped
+    depends_on:
+      - bitcoin-core
+      - mempool-db
+    networks:
+      - bitcoin-network
+
+  mempool-db:
+    image: mariadb:10.11
+    container_name: mempool-db
+    environment:
+      MYSQL_DATABASE: "mempool"
+      MYSQL_USER: "mempool"
+      MYSQL_PASSWORD: "mempool"
+      MYSQL_ROOT_PASSWORD: "admin"
+    volumes:
+      - ./mempool-db:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - bitcoin-network
+
+  btc-rpc-explorer:
+    image: saubyk/btc-rpc-explorer:latest
+    container_name: btc-rpc-explorer
+    environment:
+      BTCEXP_HOST: "0.0.0.0"
+      BTCEXP_PORT: "3002"
+      BTCEXP_BITCOIND_HOST: "bitcoin-core"
+      BTCEXP_BITCOIND_PORT: "8332"
+      BTCEXP_BITCOIND_USER: "bitcoin"
+      BTCEXP_BITCOIND_PASS: "bitcoinpassword"
+      BTCEXP_BASIC_AUTH_PASSWORD: ""
+      BTCEXP_NO_RATES: "true"
+      BTCEXP_PRIVACY_MODE: "true"
+      BTCEXP_SLOW_DEVICE_MODE: "false"
+      BTCEXP_UI_THEME: "dark"
+    ports:
+      - "3002:3002"
+    restart: unless-stopped
+    depends_on:
+      - bitcoin-core
+    networks:
+      - bitcoin-network
+
+networks:
+  bitcoin-network:
+    driver: bridge
+
+volumes:
+  bitcoin-data:
+  mempool-db:
