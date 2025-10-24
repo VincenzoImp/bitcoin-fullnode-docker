@@ -45,28 +45,26 @@ docker exec bitcoin-node bitcoin-cli -rpcuser=bitcoin -rpcpassword=bitcoinpasswo
 # Create virtual environment (first time only)
 python3 -m venv venv
 
-# Install dependencies
-./venv/bin/pip install -r requirements.txt
+# Activate virtual environment
+source venv/bin/activate
 
-# Create .env configuration (first time only)
-cp .env.example .env
+# Install dependencies (first time only)
+pip install -r requirements.txt
 
 # Run basic client
-./venv/bin/python3 bitcoin_node_client.py
+python3 bitcoin_node_client.py
 
 # Interactive CLI
-./venv/bin/python3 bitcoin_cli.py status
-./venv/bin/python3 bitcoin_cli.py info
-./venv/bin/python3 bitcoin_cli.py balance <address>
-./venv/bin/python3 bitcoin_cli.py batch-balance addresses.txt -o results.json
+python3 bitcoin_cli.py status
+python3 bitcoin_cli.py info
+python3 bitcoin_cli.py balance <address>
+python3 bitcoin_cli.py batch-balance addresses.txt -o results.json
 
 # View CLI configuration
-./venv/bin/python3 bitcoin_cli.py config
+python3 bitcoin_cli.py config
 
-# Or activate venv first (alternative)
-source venv/bin/activate
-python3 bitcoin_cli.py status
-deactivate  # when done
+# Deactivate when done
+deactivate
 ```
 
 ## Architecture
@@ -172,10 +170,10 @@ Commands implemented: `status`, `info`, `network`, `mempool`, `peers`, `fee`, `b
 **Setup:**
 ```bash
 python3 -m venv venv                    # Create virtual environment
-./venv/bin/pip install -r requirements.txt  # Install python-bitcoinrpc, click, python-dotenv
-cp .env.example .env                    # Create config file
-./venv/bin/python3 bitcoin_cli.py config   # Verify configuration
-./venv/bin/python3 bitcoin_cli.py status   # Test connection
+source venv/bin/activate                # Activate venv
+pip install -r requirements.txt         # Install python-bitcoinrpc, click
+python3 bitcoin_cli.py config           # Verify configuration
+python3 bitcoin_cli.py status           # Test connection
 ```
 
 ### Bitcoin Core Configuration
@@ -195,14 +193,14 @@ Key settings in `bitcoin.conf`:
 Initial blockchain sync takes 1-7 days (longer with Tor). Check progress:
 
 ```bash
+# Via Python CLI (easiest, with venv activated)
+python3 bitcoin_cli.py status
+
 # Via docker logs
 docker-compose logs -f bitcoin-core
 
 # Via bitcoin-cli (verificationprogress: 0.0 to 1.0)
 docker exec bitcoin-node bitcoin-cli -rpcuser=bitcoin -rpcpassword=bitcoinpassword getblockchaininfo | grep verificationprogress
-
-# Via Python CLI
-python3 bitcoin_cli.py status
 ```
 
 ### Testing Configuration Changes
@@ -220,33 +218,31 @@ python3 bitcoin_cli.py status
 # Create virtual environment
 python3 -m venv venv
 
-# Install dependencies
-./venv/bin/pip install -r requirements.txt
+# Activate virtual environment
+source venv/bin/activate
 
-# Create .env from template
-cp .env.example .env
+# Install dependencies
+pip install -r requirements.txt
 
 # Verify configuration
-./venv/bin/python3 bitcoin_cli.py config
+python3 bitcoin_cli.py config
 ```
 
 **Test connection to Docker container:**
 ```bash
 # Quick status check
-./venv/bin/python3 bitcoin_cli.py status
+python3 bitcoin_cli.py status
 
 # Check if node is syncing
-./venv/bin/python3 bitcoin_cli.py info
+python3 bitcoin_cli.py info
 ```
 
 **Using as a library:**
 ```python
-# Activate venv first
-# source venv/bin/activate
-
+# With venv activated
 from bitcoin_node_client import BitcoinNode
 
-# Auto-loads from .env file
+# Uses defaults: localhost:8332, bitcoin:bitcoinpassword
 node = BitcoinNode()
 
 # Or override with specific values
@@ -259,7 +255,7 @@ print(f"Blocks: {info['blocks']}, Sync: {info['verificationprogress']*100:.2f}%"
 
 **Override config for testing:**
 ```bash
-./venv/bin/python3 bitcoin_cli.py --host localhost --port 8332 --user bitcoin --password test --timeout 600 info
+python3 bitcoin_cli.py --host localhost --port 8332 --user bitcoin --password test --timeout 600 info
 ```
 
 ## Troubleshooting
@@ -295,11 +291,8 @@ To temporarily disable Tor and use clearnet, comment out in `bitcoin.conf`:
 Increase timeout for slow operations (balance checks, blockchain queries during sync):
 
 ```bash
-# Via command line
+# Via command line (with venv activated)
 python3 bitcoin_cli.py --timeout 600 balance <address>
-
-# Via environment variable (edit .env)
-BITCOIN_RPC_TIMEOUT=600
 ```
 
 Default timeout is 300 seconds (5 minutes). Balance checks using `scantxoutset` can take several minutes per address even with `txindex=1` enabled.

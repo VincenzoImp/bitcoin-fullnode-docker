@@ -5,7 +5,7 @@ Complete setup for a private Bitcoin full node with:
 - ✅ Dedicated Tor proxy for complete privacy and anonymity
 - ✅ Mempool Dashboard with real-time statistics
 - ✅ BTC RPC Explorer for blockchain exploration
-- ✅ Python integration for automation
+- ✅ Python RPC client library and interactive CLI
 
 ## 📋 Requirements
 
@@ -13,17 +13,40 @@ Complete setup for a private Bitcoin full node with:
 - **At least 600 GB free disk space** (for full blockchain)
 - **8 GB RAM** minimum (16 GB recommended)
 - Stable internet connection
+- Python 3.8+ (for Python CLI and automation scripts)
 
 ## 🚀 Quick Start
 
 ### 1. Start the containers
 
 ```bash
-cd bitcoin
 docker-compose up -d
 ```
 
-### 2. Monitor logs
+### 2. Setup Python environment
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Check sync status
+
+```bash
+# Using Python CLI (easier)
+python3 bitcoin_cli.py status
+
+# Or using docker bitcoin-cli
+docker exec bitcoin-node bitcoin-cli -rpcuser=bitcoin -rpcpassword=bitcoinpassword getblockchaininfo
+```
+
+### 4. Monitor logs
 
 ```bash
 # All services
@@ -34,12 +57,6 @@ docker-compose logs -f bitcoin-core
 
 # Mempool only
 docker-compose logs -f mempool-api
-```
-
-### 3. Check sync status
-
-```bash
-docker exec bitcoin-node bitcoin-cli -rpcuser=bitcoin -rpcpassword=bitcoinpassword getblockchaininfo
 ```
 
 ## 🌐 Access Services
@@ -132,43 +149,166 @@ docker-compose up -d
 
 ## 🐍 Python Integration
 
-### Install dependencies
+Python RPC client library and interactive CLI for interacting with the Bitcoin node running in Docker.
 
+**Note**: All examples below assume you have activated the virtual environment (see Quick Start step 2).
 ```bash
-pip install -r requirements.txt
+source venv/bin/activate
 ```
 
-### Run example script
+### Interactive CLI
+
+The `bitcoin_cli.py` provides a user-friendly command-line interface with multiple commands:
+
+#### Configuration
 
 ```bash
-python3 bitcoin_client.py
+# View current configuration
+python3 bitcoin_cli.py config
+
+# Use custom bitcoin.conf path
+python3 bitcoin_cli.py --conf /path/to/bitcoin.conf status
+
+# Override with command-line options
+python3 bitcoin_cli.py --user myuser --password mypass --timeout 600 info
 ```
 
-### Example Python code
+**Configuration priority**: Command-line options → bitcoin.conf → Hardcoded defaults
+
+#### Node Information
+
+```bash
+# Complete node status (blockchain, network, mempool, latest block)
+python3 bitcoin_cli.py status
+
+# Blockchain information
+python3 bitcoin_cli.py info
+
+# Network information
+python3 bitcoin_cli.py network
+
+# Connected peers
+python3 bitcoin_cli.py peers
+
+# Mempool information
+python3 bitcoin_cli.py mempool
+```
+
+#### Blocks and Transactions
+
+```bash
+# Latest block
+python3 bitcoin_cli.py latest
+
+# Block by height
+python3 bitcoin_cli.py block 800000
+
+# Transaction details
+python3 bitcoin_cli.py tx <txid>
+```
+
+#### Fee Estimation
+
+```bash
+# Fee for 6 blocks confirmation (default)
+python3 bitcoin_cli.py fee
+
+# Fee for 2 blocks confirmation
+python3 bitcoin_cli.py fee --conf-target 2
+```
+
+#### Address Balances
+
+```bash
+# Single address balance (WARNING: slow operation, use high timeout)
+python3 bitcoin_cli.py --timeout 600 balance bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
+
+# Batch check multiple addresses from file
+python3 bitcoin_cli.py --timeout 900 batch-balance addresses.txt
+
+# Save results to JSON
+python3 bitcoin_cli.py --timeout 900 batch-balance addresses.txt -o results.json
+```
+
+**Note**: Balance checks use `scantxoutset` which scans the entire UTXO set and can take 5-10 minutes per address.
+
+**addresses.txt format** (one address per line):
+```
+bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
+1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+3J98t1WpEZ73CNmYviecrnyiWrnqRhWNLy
+```
+
+**JSON output format** (when using `-o` with batch-balance):
+```json
+{
+  "total_balance": 1.23456789,
+  "addresses_checked": 3,
+  "successful": 3,
+  "addresses": [
+    {
+      "address": "bc1q...",
+      "balance": 0.5,
+      "utxos": [...],
+      "utxo_count": 2
+    }
+  ]
+}
+```
+
+#### Help
+
+```bash
+# List all commands
+python3 bitcoin_cli.py --help
+
+# Help for specific command
+python3 bitcoin_cli.py balance --help
+```
+
+### Python Library Usage
+
+Use `bitcoin_node_client.py` as a library in your own scripts:
 
 ```python
-from bitcoin_client import BitcoinNode
+from bitcoin_node_client import BitcoinNode
 
-# Connect to node
+# Connect to node (defaults: localhost:8332, bitcoin:bitcoinpassword)
+node = BitcoinNode()
+
+# Or specify custom credentials
 node = BitcoinNode(
     host="localhost",
     port=8332,
     user="bitcoin",
-    password="bitcoinpassword"
+    password="bitcoinpassword",
+    timeout=300
 )
 
 # Get blockchain info
 info = node.get_blockchain_info()
-print(f"Synced blocks: {info['blocks']}")
+print(f"Blocks: {info['blocks']}")
+print(f"Sync: {info['verificationprogress'] * 100:.2f}%")
 
 # Get latest block
 best_hash = node.get_best_block_hash()
 block = node.get_block(best_hash)
-print(f"Latest block: {block['height']}")
+print(f"Latest block height: {block['height']}")
 
 # Get mempool info
 mempool = node.get_mempool_info()
 print(f"Mempool transactions: {mempool['size']}")
+
+# Get network info (check Tor status)
+network = node.get_network_info()
+print(f"Connections: {network['connections']}")
+```
+
+### Run Demo Script
+
+```bash
+# Run the example (with venv activated)
+python3 bitcoin_node_client.py
 ```
 
 ## 📊 Initial Sync
@@ -183,11 +323,15 @@ Estimated times:
 ### Monitor progress
 
 ```bash
-# Via CLI
+# Via Python CLI (easiest - with venv activated)
+python3 bitcoin_cli.py status
+python3 bitcoin_cli.py info
+
+# Via docker bitcoin-cli
 docker exec bitcoin-node bitcoin-cli -rpcuser=bitcoin -rpcpassword=bitcoinpassword getblockchaininfo | grep verificationprogress
 
-# Via Python
-python3 -c "from bitcoin_client import BitcoinNode; node = BitcoinNode(); info = node.get_blockchain_info(); print(f'Progress: {info[\"verificationprogress\"] * 100:.2f}%')"
+# Via Python one-liner (with venv activated)
+python3 -c "from bitcoin_node_client import BitcoinNode; node = BitcoinNode(); info = node.get_blockchain_info(); print(f'Progress: {info[\"verificationprogress\"] * 100:.2f}%')"
 ```
 
 ## 🔧 Useful Commands
@@ -319,16 +463,39 @@ If persists:
 
 ### Python connection error
 
-```python
-# Verify node is reachable
-import requests
-response = requests.post(
-    'http://localhost:8332',
-    auth=('bitcoin', 'bitcoinpassword'),
-    json={"method": "getblockchaininfo", "params": []}
-)
-print(response.json())
+```bash
+# Ensure venv is activated
+source venv/bin/activate
+
+# Check configuration
+python3 bitcoin_cli.py config
+
+# Test basic connection
+python3 bitcoin_cli.py info
+
+# If it fails, verify Docker container is running
+docker ps | grep bitcoin-node
+
+# Check RPC port is exposed
+docker port bitcoin-node 8332
+
+# Test direct RPC connection
+curl -u bitcoin:bitcoinpassword --data-binary '{"jsonrpc":"1.0","id":"test","method":"getblockchaininfo","params":[]}' -H 'content-type:text/plain;' http://localhost:8332/
 ```
+
+### Python timeout errors
+
+If balance checks or other slow operations timeout:
+
+```bash
+# Increase timeout (default is 300 seconds, with venv activated)
+python3 bitcoin_cli.py --timeout 600 balance <address>
+
+# For batch operations
+python3 bitcoin_cli.py --timeout 900 batch-balance addresses.txt
+```
+
+**Note**: `scantxoutset` operations can take 5-10 minutes even with a fast SSD.
 
 ## 📚 Resources
 
