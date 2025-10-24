@@ -2,6 +2,9 @@
 """
 Python client for interacting with Bitcoin node via RPC
 Requires: pip install python-bitcoinrpc
+
+This client connects to Bitcoin Core running in a Docker container.
+Defaults are configured for the Docker setup (localhost:8332).
 """
 
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
@@ -9,11 +12,36 @@ import json
 
 
 class BitcoinNode:
-    """Bitcoin node RPC client"""
+    """
+    Bitcoin node RPC client
 
-    def __init__(self, host="localhost", port=8332, user="bitcoin", password="bitcoinpassword"):
-        self.rpc_url = f"http://{user}:{password}@{host}:{port}"
-        self.connection = AuthServiceProxy(self.rpc_url)
+    Connects to Bitcoin Core running in Docker container via exposed RPC port.
+    By default uses localhost:8332 which maps to the Docker container's RPC port.
+    """
+
+    def __init__(self, host="localhost", port=8332, user="bitcoin", password="bitcoinpassword", timeout=120):
+        """
+        Initialize Bitcoin node connection
+
+        Args:
+            host: Bitcoin node hostname (default: 'localhost' for Docker)
+            port: Bitcoin node RPC port (default: 8332)
+            user: RPC username (default: 'bitcoin')
+            password: RPC password (default: 'bitcoinpassword')
+            timeout: Connection timeout in seconds (default: 120)
+
+        For Docker setup:
+            - host is always 'localhost' (Docker exposes port 8332 to host)
+            - Credentials must match bitcoin.conf inside the container
+        """
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.timeout = timeout
+
+        self.rpc_url = f"http://{self.user}:{self.password}@{self.host}:{self.port}"
+        self.connection = AuthServiceProxy(self.rpc_url, timeout=self.timeout)
 
     def get_blockchain_info(self):
         """Get blockchain information"""
@@ -98,6 +126,27 @@ class BitcoinNode:
             print(f"RPC Error: {e}")
             return None
 
+    def get_address_balance(self, address):
+        """
+        Get balance for a specific address
+        Note: Uses scantxoutset which works on standard nodes but can be slow
+        For faster results, enable txindex in bitcoin.conf
+        """
+        try:
+            # Using scantxoutset - works on standard nodes but can be slow
+            result = self.connection.scantxoutset("start", [f"addr({address})"])
+            if result:
+                return {
+                    "address": address,
+                    "balance": result.get("total_amount", 0),
+                    "utxos": result.get("unspents", []),
+                    "utxo_count": len(result.get("unspents", []))
+                }
+            return None
+        except JSONRPCException as e:
+            print(f"RPC Error for address {address}: {e}")
+            return None
+
 
 def print_json(data):
     """Print formatted JSON"""
@@ -108,7 +157,9 @@ def main():
     """Example usage"""
     print("=== Bitcoin Node Client ===\n")
 
-    node = BitcoinNode()
+    # Initialize with custom timeout (default is 120 seconds)
+    # Increase timeout if your node is slow or under heavy load
+    node = BitcoinNode(timeout=300)  # 5 minutes timeout
 
     print("📊 Blockchain Information:")
     blockchain_info = node.get_blockchain_info()
